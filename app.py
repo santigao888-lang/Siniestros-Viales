@@ -1,7 +1,25 @@
+import os
+import warnings
+from pathlib import Path
+
 import streamlit as st
 import pandas as pd
 import joblib
-import os
+
+# Si se ejecuta con "python app.py", avisar cómo iniciarlo correctamente en local.
+# Streamlit debe lanzarse con: python -m streamlit run app.py
+try:
+    from streamlit import runtime
+    if not runtime.exists():
+        print(
+            "Esta es una aplicación de Streamlit y no se ejecuta con 'python app.py'.\n"
+            "Iníciala en local con:\n\n"
+            "    python -m streamlit run app.py\n"
+        )
+        raise SystemExit(0)
+except ImportError:
+    print("Falta instalar Streamlit. Ejecuta: python -m pip install -r requirements.txt")
+    raise SystemExit(1)
 
 st.set_page_config(
     page_title="Siniestros viales en Bogotá",
@@ -10,16 +28,27 @@ st.set_page_config(
     initial_sidebar_state="expanded"
 )
 
-if not os.path.exists("pipeline.pkl"):
-    st.error("No se encontró el archivo pipeline.pkl. Verifica que esté subido en el mismo nivel de app.py.")
+# Rutas relativas al archivo app.py, no al directorio desde donde se ejecuta.
+BASE_DIR = Path(__file__).resolve().parent
+PIPELINE_PATH = BASE_DIR / "pipeline.pkl"
+
+if not PIPELINE_PATH.exists():
+    st.error(
+        f"No se encontró el archivo pipeline.pkl.\n\n"
+        f"Debe estar en la misma carpeta que app.py: {BASE_DIR}"
+    )
     st.stop()
 
-if os.path.getsize("pipeline.pkl") == 0:
-    st.error("El archivo pipeline.pkl está vacío o corrupto. Súbelo nuevamente.")
+if PIPELINE_PATH.stat().st_size == 0:
+    st.error("El archivo pipeline.pkl está vacío o corrupto. Vuelve a generarlo.")
     st.stop()
 
 try:
-    data = joblib.load("pipeline.pkl")
+    with warnings.catch_warnings():
+        # El modelo se entrenó con otra versión de scikit-learn; es solo un aviso.
+        warnings.filterwarnings("ignore", message=".*InconsistentVersionWarning.*")
+        data = joblib.load(PIPELINE_PATH)
+
     modelo = data["modelo"]
     scaler = data["scaler"]
     columnas = data["columnas"]
